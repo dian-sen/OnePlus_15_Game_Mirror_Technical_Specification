@@ -4,25 +4,14 @@ plugins {
 
 android {
     namespace = "com.example.gamemirror"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.gamemirror"
         minSdk = 30
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 8
         versionName = "1.0.2"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags += listOf("-std=c++17", "-Wall", "-O2", "-fno-exceptions", "-fno-rtti")
-                arguments += listOf("-DANDROID_STL=c++_shared")
-            }
-        }
     }
 
     buildTypes {
@@ -39,13 +28,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 
     buildFeatures {
