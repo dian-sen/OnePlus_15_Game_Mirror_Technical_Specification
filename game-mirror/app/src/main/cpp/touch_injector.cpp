@@ -321,6 +321,14 @@ bool TouchInjector::createUinputDevice() {
     absSetup.absinfo.maximum = 65535;
     ioctl(uinputFd_, UI_ABS_SETUP, &absSetup);
 
+    absSetup.code = ABS_MT_PRESSURE;
+    absSetup.absinfo.maximum = 255;
+    ioctl(uinputFd_, UI_ABS_SETUP, &absSetup);
+
+    absSetup.code = ABS_MT_TOUCH_MAJOR;
+    absSetup.absinfo.maximum = 255;
+    ioctl(uinputFd_, UI_ABS_SETUP, &absSetup);
+
     // 设备身份信息
     struct uinput_setup usetup;
     memset(&usetup, 0, sizeof(usetup));

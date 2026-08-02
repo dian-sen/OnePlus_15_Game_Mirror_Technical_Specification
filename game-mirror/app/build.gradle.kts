@@ -5,14 +5,14 @@ plugins {
 
 android {
     namespace = "com.example.gamemirror"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.gamemirror"
-        minSdk = 35
-        targetSdk = 35
-        versionCode = 6
-        versionName = "1.0.5"
+        minSdk = 30
+        targetSdk = 34
+        versionCode = 7
+        versionName = "1.0.6"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
