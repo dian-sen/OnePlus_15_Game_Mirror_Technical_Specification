@@ -4,6 +4,7 @@ import android.graphics.SurfaceTexture;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
+import android.opengl.Matrix;
 import android.util.Log;
 import android.view.Surface;
 
@@ -85,6 +86,9 @@ public class GLRenderer implements GLSurfaceView.Renderer {
     private long lastFrameTimeNs = 0;
     private static final long FRAME_INTERVAL_NS = 6_060_606L; // ~6.06ms per frame @ 165Hz
 
+    // MVP 矩阵（单位矩阵，全屏渲染无需变换）
+    private final float[] mvpMatrix = new float[16];
+
     private SurfaceTexture surfaceTexture;
     private Surface surface;
 
@@ -124,6 +128,9 @@ public class GLRenderer implements GLSurfaceView.Renderer {
         aTexCoordLoc = GLES20.glGetAttribLocation(program, "aTexCoord");
         uCropRectLoc = GLES20.glGetUniformLocation(program, "uCropRect");
 
+        // 初始化 MVP 矩阵为单位矩阵
+        Matrix.setIdentityM(mvpMatrix, 0);
+
         Log.i(TAG, "OpenGL ES renderer initialized, textureId=" + textureId);
     }
 
@@ -152,6 +159,9 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
         GLES20.glUseProgram(program);
+
+        // 设置 MVP 矩阵
+        GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, mvpMatrix, 0);
 
         // 设置裁剪区域
         GLES20.glUniform4f(uCropRectLoc, cropLeft, cropTop, cropWidth, cropHeight);

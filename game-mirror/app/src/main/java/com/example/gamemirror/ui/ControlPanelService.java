@@ -28,6 +28,7 @@ public class ControlPanelService extends Service {
 
     private WindowManager windowManager;
     private View controlPanel;
+    private boolean overlayRunning = false;
 
     @Override
     public void onCreate() {
@@ -79,9 +80,17 @@ public class ControlPanelService extends Service {
 
     private void toggleOverlay() {
         Intent intent = new Intent(this, MirrorOverlayService.class);
-        // 简单切换：如果正在运行则停止，否则启动
-        stopService(intent);
-        startForegroundService(intent);
+        if (overlayRunning) {
+            stopService(intent);
+            overlayRunning = false;
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+            overlayRunning = true;
+        }
     }
 
     private void enterSelectionMode() {

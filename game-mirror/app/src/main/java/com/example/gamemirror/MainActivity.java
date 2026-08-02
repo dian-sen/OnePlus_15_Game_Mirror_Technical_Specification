@@ -22,6 +22,7 @@ import com.example.gamemirror.overlay.MirrorOverlayService;
 public class MainActivity extends Activity {
 
     private static final int REQUEST_OVERLAY_PERMISSION = 1001;
+    private static final int REQUEST_SCREEN_CAPTURE = 1002;
 
     private TextView statusText;
     private Button startButton;
@@ -63,7 +64,7 @@ public class MainActivity extends Activity {
      */
     private void requestScreenCapture() {
         Intent intent = new Intent(this, PermissionActivity.class);
-        startActivity(intent);
+        startActivityForResult(intent, REQUEST_SCREEN_CAPTURE);
     }
 
     /**
@@ -104,8 +105,27 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_OVERLAY_PERMISSION && resultCode == RESULT_OK) {
-            openOverlay();
+
+        if (requestCode == REQUEST_OVERLAY_PERMISSION) {
+            if (resultCode == RESULT_OK) {
+                openOverlay();
+            }
+            return;
+        }
+
+        if (requestCode == REQUEST_SCREEN_CAPTURE && resultCode == RESULT_OK && data != null) {
+            // 将 MediaProjection 数据传递给 MirrorOverlayService
+            Intent serviceIntent = new Intent(this, MirrorOverlayService.class);
+            serviceIntent.putExtra("resultCode", data.getIntExtra("resultCode", -1));
+            serviceIntent.putExtra("data",
+                    data.getParcelableExtra("data", android.content.Intent.class));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+            statusText.setText("状态：录屏已授权，悬浮窗启动中");
+            Toast.makeText(this, "录屏权限已获取，请切换到游戏", Toast.LENGTH_SHORT).show();
         }
     }
 }

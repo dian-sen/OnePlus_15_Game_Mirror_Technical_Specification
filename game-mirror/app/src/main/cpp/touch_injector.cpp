@@ -155,22 +155,38 @@ bool TouchInjector::isTouchDevice(const std::string& path) {
         return false;
     }
 
-    // 检查设备能力位：支持 ABS_MT_POSITION_X 且支持 EV_KEY + BTN_TOUCH
-    unsigned long absBits[EV_CNT / (sizeof(unsigned long) * 8) + 1];
+    // 检查设备能力位：支持 ABS_MT_POSITION_X/Y 且支持 EV_KEY + BTN_TOUCH
+    // KEY_MAX 远大于 EV_CNT，需要用 KEY_CNT 来正确分配缓冲区
+    unsigned long absBits[KEY_CNT / (sizeof(unsigned long) * 8) + 1];
     memset(absBits, 0, sizeof(absBits));
 
+    // 检查 ABS 能力位
     if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(absBits)), absBits) < 0) {
         close(fd);
         return false;
     }
 
-    // 检查是否支持多点触控绝对坐标
-    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(absBits)), absBits) < 0) {
+    // 必须支持多点触控绝对坐标
+    bool hasAbsMtX = (absBits[ABS_MT_POSITION_X / (sizeof(unsigned long) * 8)]
+            & (1UL << (ABS_MT_POSITION_X % (sizeof(unsigned long) * 8)))) != 0;
+    bool hasAbsMtY = (absBits[ABS_MT_POSITION_Y / (sizeof(unsigned long) * 8)]
+            & (1UL << (ABS_MT_POSITION_Y % (sizeof(unsigned long) * 8)))) != 0;
+
+    if (!hasAbsMtX || !hasAbsMtY) {
         close(fd);
         return false;
     }
 
-    bool hasTouchKey = (absBits[BTN_TOUCH / (sizeof(unsigned long) * 8)]
+    // 检查 KEY 能力位
+    unsigned long keyBits[KEY_CNT / (sizeof(unsigned long) * 8) + 1];
+    memset(keyBits, 0, sizeof(keyBits));
+
+    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyBits)), keyBits) < 0) {
+        close(fd);
+        return false;
+    }
+
+    bool hasTouchKey = (keyBits[BTN_TOUCH / (sizeof(unsigned long) * 8)]
             & (1UL << (BTN_TOUCH % (sizeof(unsigned long) * 8)))) != 0;
 
     close(fd);
