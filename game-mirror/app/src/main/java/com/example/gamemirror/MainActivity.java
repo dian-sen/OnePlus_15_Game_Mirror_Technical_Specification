@@ -1,6 +1,7 @@
 package com.example.gamemirror;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -197,15 +198,34 @@ public class MainActivity extends Activity {
 
     /**
      * 发送 Action 指令到 MirrorOverlayService
+     * 服务已运行时用 startService，未运行时用 startForegroundService
      */
     private void sendAction(String action) {
         Intent intent = new Intent(this, MirrorOverlayService.class);
         intent.setAction(action);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+        if (isServiceRunning(MirrorOverlayService.class)) {
+            startService(intent);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);
         } else {
             startService(intent);
         }
+    }
+
+    /**
+     * 检查指定服务是否正在运行
+     */
+    private boolean isServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        if (manager != null) {
+            for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+                if (serviceClass.getName().equals(service.service.getClassName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

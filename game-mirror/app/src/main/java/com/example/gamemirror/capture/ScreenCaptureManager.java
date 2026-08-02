@@ -24,8 +24,6 @@ import android.view.Surface;
 public class ScreenCaptureManager {
 
     private static final String TAG = "ScreenCapture";
-    private static final int DEFAULT_WIDTH = 1280;
-    private static final int DEFAULT_HEIGHT = 2800;
     private static final float TARGET_FRAME_RATE = 165.0f;
 
     private final Context context;
@@ -39,6 +37,10 @@ public class ScreenCaptureManager {
 
     private boolean isCapturing = false;
 
+    // 屏幕实际尺寸（动态获取）
+    private int screenWidth;
+    private int screenHeight;
+
     // A 区域参数（源区域在屏幕上的绝对位置）
     private int areaX = 0;
     private int areaY = 0;
@@ -49,6 +51,11 @@ public class ScreenCaptureManager {
         this.context = context;
         this.projectionManager = (MediaProjectionManager)
                 context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
+        // 动态获取设备实际屏幕分辨率
+        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+        this.screenWidth = metrics.widthPixels;
+        this.screenHeight = metrics.heightPixels;
     }
 
     /**
@@ -78,8 +85,8 @@ public class ScreenCaptureManager {
 
             virtualDisplay = mediaProjection.createVirtualDisplay(
                     "GameMirror-VD",
-                    DEFAULT_WIDTH,
-                    DEFAULT_HEIGHT,
+                    screenWidth,
+                    screenHeight,
                     density,
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR
                             | DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
@@ -131,17 +138,14 @@ public class ScreenCaptureManager {
 
     /**
      * 更新 A 区域（源裁剪区域）参数
+     * 注意：裁剪由 GLRenderer 在 GPU 层面通过 UV 坐标完成，
+     * VirtualDisplay 保持全屏分辨率不变，避免双重裁剪。
      */
     public void setCropArea(int x, int y, int width, int height) {
         this.areaX = x;
         this.areaY = y;
         this.areaWidth = width;
         this.areaHeight = height;
-
-        if (virtualDisplay != null) {
-            virtualDisplay.resize(width, height, 160);
-            virtualDisplay.surfaceChanged(inputSurface, 0, width, height);
-        }
     }
 
     public boolean isCapturing() {

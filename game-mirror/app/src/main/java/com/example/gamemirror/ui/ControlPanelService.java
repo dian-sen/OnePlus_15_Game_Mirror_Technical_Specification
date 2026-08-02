@@ -81,7 +81,10 @@ public class ControlPanelService extends Service {
     private void toggleOverlay() {
         Intent intent = new Intent(this, MirrorOverlayService.class);
         if (overlayRunning) {
-            stopService(intent);
+            // 发送 ACTION_STOP 指令让服务自行 stopSelf()，
+            // stopService() 无法可靠停止前台服务
+            intent.setAction(MirrorOverlayService.ACTION_STOP);
+            startService(intent);
             overlayRunning = false;
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

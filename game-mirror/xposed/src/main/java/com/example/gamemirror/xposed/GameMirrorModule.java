@@ -262,13 +262,15 @@ public class GameMirrorModule extends XposedModule {
     }
 
     // ========================================================================
-    // Hooker 类 7: ColorOS 录屏弹窗抑制
+    // Hooker 类 7: ColorOS 录屏弹窗抑制（BeforeInvocation 阻止构造）
     // ========================================================================
     @XposedHooker
     public static class OplusDialogSuppressor implements XposedInterface.Hooker {
 
-        @AfterInvocation
-        public static void afterInvoke(@NonNull AfterHookParam param) {
+        @BeforeInvocation
+        public static void beforeInvoke(@NonNull BeforeHookParam param) {
+            // 阻止 OplusScreenRecordDialog 构造，真正抑制弹窗
+            param.setResult(null);
             Log.d(TAG, "OplusScreenRecordDialog suppressed");
         }
     }

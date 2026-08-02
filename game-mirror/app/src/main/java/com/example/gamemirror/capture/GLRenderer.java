@@ -264,6 +264,31 @@ public class GLRenderer implements GLSurfaceView.Renderer {
         return surface;
     }
 
+    /**
+     * 释放 GL 资源（纹理、Shader Program）
+     * 应在不再需要渲染时调用，防止 GPU 资源泄漏
+     */
+    public void release() {
+        if (surface != null) {
+            surface.release();
+            surface = null;
+        }
+        if (surfaceTexture != null) {
+            surfaceTexture.release();
+            surfaceTexture = null;
+        }
+        if (program != 0) {
+            GLES20.glDeleteProgram(program);
+            program = 0;
+        }
+        if (textureId != 0) {
+            int[] textures = {textureId};
+            GLES20.glDeleteTextures(1, textures, 0);
+            textureId = 0;
+        }
+        Log.i(TAG, "GL resources released");
+    }
+
     private int buildProgram(String vertexSrc, String fragmentSrc) {
         int vertexShader = compileShader(GLES20.GL_VERTEX_SHADER, vertexSrc);
         int fragmentShader = compileShader(GLES20.GL_FRAGMENT_SHADER, fragmentSrc);

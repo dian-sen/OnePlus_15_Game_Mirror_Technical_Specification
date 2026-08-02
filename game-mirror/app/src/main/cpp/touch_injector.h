@@ -103,6 +103,7 @@ private:
     bool isUinput_;        // 是否使用 uinput 虚拟设备
     int uinputFd_;         // uinput 设备 fd（与 fd_ 指向同一设备时相同）
     int maxSlots_;         // 最大触控点数
+    int activeSlots_;      // 当前活跃的触控点数（用于 BTN_TOUCH 管理）
 };
 
 #endif // TOUCH_INJECTOR_H
