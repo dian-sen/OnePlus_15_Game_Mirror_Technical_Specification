@@ -1,0 +1,10 @@
+[versions]
+agp = "8.7.3"
+libxposed-api = "102"
+
+[libraries]
+libxposed-api = { module = "io.github.libxposed:api", version.ref = "libxposed-api" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }

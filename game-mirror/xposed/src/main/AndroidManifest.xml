@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- LSPosed 模块标识 -->
+    <application
+        android:allowBackup="false"
+        android:supportsRtl="true">
+
+        <!-- LSPosed API 102 模块入口 -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+
+        <meta-data
+            android:name="xposeddescription"
+            android:value="GameMirror - 一加15 画面提取与触控映射模块" />
+
+        <meta-data
+            android:name="xposedminversion"
+            android:value="102" />
+
+        <meta-data
+            android:name="xposedscope"
+            android:resource="@array/xposed_scope" />
+
+    </application>
+</manifest>
