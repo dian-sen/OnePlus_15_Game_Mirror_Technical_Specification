@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GameMirror</string>
+    <string name="overlay_channel_name">游戏镜像悬浮窗</string>
+    <string name="overlay_channel_desc">一加15 画面提取与触控映射服务</string>
+    <string name="start_mirror">开始镜像</string>
+    <string name="stop_mirror">停止镜像</string>
+    <string name="select_area">框选区域</string>
+    <string name="open_overlay">打开悬浮窗</string>
+    <string name="battery_whitelist_hint">请将应用添加到电池优化白名单以保持后台运行</string>
+</resources>
