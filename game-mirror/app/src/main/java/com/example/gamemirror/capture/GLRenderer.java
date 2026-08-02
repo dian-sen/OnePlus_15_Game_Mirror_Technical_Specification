@@ -8,19 +8,18 @@ import android.opengl.Matrix;
 import android.util.Log;
 import android.view.Surface;
 
+import com.example.gamemirror.config.ConfigManager;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 
 /**
  * OpenGL ES 渲染器
  * 使用 GPU 直接在显存中裁剪 A 区域并渲染到 B 悬浮窗
  * 基于 OES_EGL_image_external 扩展，零 CPU 内存拷贝
  *
- * 一加 15 适配：165Hz 帧率同步，低延迟 GPU 渲染
+ * 一加 15 适配：165Hz 帧率同步，uMirror 镜像翻转，自适应帧率 + FPS 统计
  */
 public class GLRenderer implements GLSurfaceView.Renderer {
 
@@ -37,16 +36,21 @@ public class GLRenderer implements GLSurfaceView.Renderer {
             "  vTexCoord = aTexCoord;\n" +
             "}";
 
-    // 片段着色器：使用 uCropRect 在 GPU 侧裁剪 A 区域
-    // uCropRect = [left, top, width, height] 归一化 UV 坐标
+    // 片段着色器：uCropRect 裁剪 + uMirror 镜像翻转
+    // uMirror: 0=无, 1=水平, 2=垂直, 3=双向
     private static final String FRAGMENT_SHADER =
             "#extension GL_OES_EGL_image_external : require\n" +
             "precision mediump float;\n" +
             "varying vec2 vTexCoord;\n" +
             "uniform samplerExternalOES sTexture;\n" +
             "uniform vec4 uCropRect;\n" +
+            "uniform int uMirror;\n" +
             "void main() {\n" +
-            "  vec2 croppedUV = uCropRect.xy + vTexCoord * uCropRect.zw;\n" +
+            "  vec2 uv = vTexCoord;\n" +
+            "  if (uMirror == 1) uv.x = 1.0 - uv.x;\n" +
+            "  else if (uMirror == 2) uv.y = 1.0 - uv.y;\n" +
+            "  else if (uMirror == 3) { uv.x = 1.0 - uv.x; uv.y = 1.0 - uv.y; }\n" +
+            "  vec2 croppedUV = uCropRect.xy + uv * uCropRect.zw;\n" +
             "  gl_FragColor = texture2D(sTexture, croppedUV);\n" +
             "}";
 
@@ -71,6 +75,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
     private int aPositionLoc;
     private int aTexCoordLoc;
     private int uCropRectLoc;
+    private int uMirrorLoc;
 
     // A 区域裁剪参数（归一化 UV 坐标）
     private float cropLeft = 0.0f;
@@ -82,11 +87,22 @@ public class GLRenderer implements GLSurfaceView.Renderer {
     private int screenWidth = 1280;
     private int screenHeight = 2800;
 
-    // 165Hz 帧率控制
-    private long lastFrameTimeNs = 0;
-    private static final long FRAME_INTERVAL_NS = 6_060_606L; // ~6.06ms per frame @ 165Hz
+    // 镜像模式
+    private int mirrorMode = ConfigManager.MIRROR_NONE;
 
-    // MVP 矩阵（单位矩阵，全屏渲染无需变换）
+    // 自适应帧率控制
+    private long lastFrameTimeNs = 0;
+    private long frameIntervalNs = 6_060_606L; // ~6.06ms @ 165Hz default
+    private static final long MIN_FRAME_INTERVAL_NS = 4_166_667L; // ~240Hz max
+    private static final long MAX_FRAME_INTERVAL_NS = 33_333_333L; // ~30Hz min
+
+    // FPS 统计
+    private long fpsStartTimeNs = 0;
+    private int fpsFrameCount = 0;
+    private float currentFps = 0.0f;
+    private long lastFpsUpdateNs = 0;
+
+    // MVP 矩阵
     private final float[] mvpMatrix = new float[16];
 
     private SurfaceTexture surfaceTexture;
@@ -127,9 +143,11 @@ public class GLRenderer implements GLSurfaceView.Renderer {
         aPositionLoc = GLES20.glGetAttribLocation(program, "aPosition");
         aTexCoordLoc = GLES20.glGetAttribLocation(program, "aTexCoord");
         uCropRectLoc = GLES20.glGetUniformLocation(program, "uCropRect");
+        uMirrorLoc = GLES20.glGetUniformLocation(program, "uMirror");
 
-        // 初始化 MVP 矩阵为单位矩阵
         Matrix.setIdentityM(mvpMatrix, 0);
+        fpsStartTimeNs = System.nanoTime();
+        fpsFrameCount = 0;
 
         Log.i(TAG, "OpenGL ES renderer initialized, textureId=" + textureId);
     }
@@ -142,15 +160,24 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        // 165Hz 帧率同步
+        // 自适应帧率控制
         long now = System.nanoTime();
         if (lastFrameTimeNs > 0) {
             long elapsed = now - lastFrameTimeNs;
-            if (elapsed < FRAME_INTERVAL_NS) {
-                return; // 跳帧，匹配 165Hz
+            if (elapsed < frameIntervalNs) {
+                return;
             }
         }
         lastFrameTimeNs = now;
+
+        // FPS 统计
+        fpsFrameCount++;
+        long fpsElapsed = now - lastFpsUpdateNs;
+        if (fpsElapsed >= 1_000_000_000L) { // 每秒更新一次
+            currentFps = fpsFrameCount * 1_000_000_000.0f / fpsElapsed;
+            fpsFrameCount = 0;
+            lastFpsUpdateNs = now;
+        }
 
         // 更新纹理
         if (surfaceTexture != null) {
@@ -165,6 +192,9 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
         // 设置裁剪区域
         GLES20.glUniform4f(uCropRectLoc, cropLeft, cropTop, cropWidth, cropHeight);
+
+        // 设置镜像模式
+        GLES20.glUniform1i(uMirrorLoc, mirrorMode);
 
         // 设置顶点属性
         vertexBuffer.position(0);
@@ -187,10 +217,6 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
     /**
      * 更新 A 区域裁剪参数（归一化 UV 坐标）
-     * @param x    A 区域左上角 X 像素
-     * @param y    A 区域左上角 Y 像素
-     * @param w    A 区域宽度 像素
-     * @param h    A 区域高度 像素
      */
     public void updateCropRect(int x, int y, int w, int h) {
         this.cropLeft = (float) x / screenWidth;
@@ -202,6 +228,33 @@ public class GLRenderer implements GLSurfaceView.Renderer {
     public void setScreenSize(int width, int height) {
         this.screenWidth = width;
         this.screenHeight = height;
+    }
+
+    /**
+     * 设置镜像模式
+     * @param mode ConfigManager.MIRROR_NONE / HORIZONTAL / VERTICAL / BOTH
+     */
+    public void setMirrorMode(int mode) {
+        this.mirrorMode = mode;
+    }
+
+    /**
+     * 设置目标帧率（自适应调节帧间隔）
+     * @param fps 目标帧率，如 60, 120, 165
+     */
+    public void setTargetFrameRate(float fps) {
+        if (fps <= 0) return;
+        long interval = (long) (1_000_000_000L / fps);
+        this.frameIntervalNs = Math.max(MIN_FRAME_INTERVAL_NS,
+                Math.min(MAX_FRAME_INTERVAL_NS, interval));
+        Log.i(TAG, "Target frame rate: " + fps + "fps (interval=" + frameIntervalNs + "ns)");
+    }
+
+    /**
+     * 获取当前实际 FPS
+     */
+    public float getCurrentFps() {
+        return currentFps;
     }
 
     /**

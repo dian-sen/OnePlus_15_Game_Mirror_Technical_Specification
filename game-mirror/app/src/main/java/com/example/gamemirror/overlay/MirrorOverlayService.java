@@ -8,20 +8,28 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.WindowManager;
 
 import com.example.gamemirror.MainActivity;
 import com.example.gamemirror.capture.ScreenCaptureManager;
+import com.example.gamemirror.config.ConfigManager;
 import com.example.gamemirror.touch.TouchRedirector;
 
 /**
  * 悬浮窗 Overlay 服务
  * 管理 B 区域悬浮窗的生命周期，协调画面采集与触控映射
  *
+ * 支持 Action 指令：
+ * - toggle_mirror ：切换镜像模式
+ * - increase_alpha ：增加透明度
+ * - decrease_alpha ：降低透明度
+ * - stop ：停止服务
+ *
  * 一加 15 ColorOS 适配：
  * - 前台服务保证后台存活
- * - 165Hz Surface 帧率绑定
+ * - ConfigManager 持久化配置
  */
 public class MirrorOverlayService extends Service {
 
@@ -29,10 +37,18 @@ public class MirrorOverlayService extends Service {
     private static final String CHANNEL_ID = "game_mirror_overlay";
     private static final int NOTIFICATION_ID = 0xAF02;
 
+    public static final String ACTION_TOGGLE_MIRROR = "com.example.gamemirror.action.TOGGLE_MIRROR";
+    public static final String ACTION_INCREASE_ALPHA = "com.example.gamemirror.action.INCREASE_ALPHA";
+    public static final String ACTION_DECREASE_ALPHA = "com.example.gamemirror.action.DECREASE_ALPHA";
+    public static final String ACTION_STOP = "com.example.gamemirror.action.STOP";
+
+    private static final float ALPHA_STEP = 0.05f;
+
     private WindowManager windowManager;
     private MirrorOverlayView overlayView;
     private ScreenCaptureManager captureManager;
     private TouchRedirector touchRedirector;
+    private ConfigManager configManager;
 
     @Override
     public void onCreate() {
@@ -40,21 +56,32 @@ public class MirrorOverlayService extends Service {
         Log.i(TAG, "MirrorOverlayService creating...");
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        configManager = new ConfigManager(this);
         touchRedirector = new TouchRedirector();
         captureManager = new ScreenCaptureManager(this);
+
+        // 记录屏幕尺寸
+        DisplayMetrics metrics = getResources().getDisplayMetrics();
+        configManager.setScreenSize(metrics.widthPixels, metrics.heightPixels);
 
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, buildNotification());
 
-        // 创建并添加悬浮窗
-        overlayView = new MirrorOverlayView(this, windowManager, touchRedirector);
+        // 创建并添加悬浮窗，传入 ConfigManager
+        overlayView = new MirrorOverlayView(this, windowManager, touchRedirector, configManager);
         windowManager.addView(overlayView, overlayView.getLayoutParams());
 
-        Log.i(TAG, "MirrorOverlayService started, overlay added");
+        // 应用 A 区域配置到触控重定向器
+        touchRedirector.setArea(
+                configManager.getAreaX(), configManager.getAreaY(),
+                configManager.getAreaWidth(), configManager.getAreaHeight());
+
+        Log.i(TAG, "MirrorOverlayService started, overlay added (uinput="
+                + touchRedirector.isUinputMode() + ")");
     }
 
     /**
-     * 启动画面采集（由外部调用，传入已获取的 MediaProjection 数据）
+     * 启动画面采集
      */
     public void startScreenCapture(Intent data, int resultCode) {
         if (captureManager == null || overlayView == null) {
@@ -62,27 +89,49 @@ public class MirrorOverlayService extends Service {
             return;
         }
 
-        // 使用 OpenGL Surface 作为 VirtualDisplay 输出
         captureManager.startCapture(data, resultCode,
                 overlayView.getGLRenderer().getInputSurface());
 
-        // 设置渲染器裁剪区域
         overlayView.getGLRenderer().updateCropRect(
-                captureManager.getAreaX(),
-                captureManager.getAreaY(),
-                captureManager.getAreaWidth(),
-                captureManager.getAreaHeight()
-        );
+                configManager.getAreaX(), configManager.getAreaY(),
+                configManager.getAreaWidth(), configManager.getAreaHeight());
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // 检查是否有 MediaProjection 数据
-        if (intent != null && intent.hasExtra("data")) {
-            int resultCode = intent.getIntExtra("resultCode", -1);
-            Intent data = intent.getParcelableExtra("data");
-            if (data != null) {
-                startScreenCapture(data, resultCode);
+        if (intent != null) {
+            String action = intent.getAction();
+
+            if (action != null && overlayView != null) {
+                switch (action) {
+                    case ACTION_TOGGLE_MIRROR:
+                        overlayView.cycleMirrorMode();
+                        Log.i(TAG, "Mirror mode cycled to: " + configManager.getMirrorMode());
+                        break;
+
+                    case ACTION_INCREASE_ALPHA:
+                        overlayView.setMirrorAlpha(overlayView.getMirrorAlpha() + ALPHA_STEP);
+                        Log.i(TAG, "Alpha increased to: " + overlayView.getMirrorAlpha());
+                        break;
+
+                    case ACTION_DECREASE_ALPHA:
+                        overlayView.setMirrorAlpha(overlayView.getMirrorAlpha() - ALPHA_STEP);
+                        Log.i(TAG, "Alpha decreased to: " + overlayView.getMirrorAlpha());
+                        break;
+
+                    case ACTION_STOP:
+                        stopSelf();
+                        return START_NOT_STICKY;
+                }
+            }
+
+            // 检查是否有 MediaProjection 数据
+            if (intent.hasExtra("data")) {
+                int resultCode = intent.getIntExtra("resultCode", -1);
+                Intent data = intent.getParcelableExtra("data", Intent.class);
+                if (data != null) {
+                    startScreenCapture(data, resultCode);
+                }
             }
         }
         return START_STICKY;
