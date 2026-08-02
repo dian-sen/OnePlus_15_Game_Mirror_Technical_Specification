@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.gamemirror"
         minSdk = 35
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -55,6 +55,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":xposed"))
     implementation("io.github.libxposed:api:102")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
 }

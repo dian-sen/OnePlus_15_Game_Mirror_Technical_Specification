@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- LSPosed 作用域：仅 Hook Android 系统框架 -->
+    <!-- LSPosed 作用域：Hook Android 系统框架 + SystemUI -->
     <string-array name="xposed_scope">
         <item>android</item>
+        <item>com.android.systemui</item>
     </string-array>
 </resources>
