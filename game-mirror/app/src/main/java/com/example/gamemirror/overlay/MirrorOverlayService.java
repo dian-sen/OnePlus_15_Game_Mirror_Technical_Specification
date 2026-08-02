@@ -17,7 +17,8 @@ import com.example.gamemirror.capture.ScreenCaptureManager;
 import com.example.gamemirror.config.ConfigManager;
 import com.example.gamemirror.touch.TouchRedirector;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 悬浮窗 Overlay 服务
@@ -52,8 +53,8 @@ public class MirrorOverlayService extends Service {
     private TouchRedirector touchRedirector;
     private ConfigManager configManager;
 
-    // 初始化完成标志（防止 onStartCommand 在 onCreate 完成前处理 Intent）
-    private final AtomicBoolean initialized = new AtomicBoolean(false);
+    // 初始化完成同步锁（防止 onStartCommand 在 onCreate 完成前处理 Intent）
+    private final CountDownLatch initLatch = new CountDownLatch(1);
 
     @Override
     public void onCreate() {
@@ -82,7 +83,7 @@ public class MirrorOverlayService extends Service {
                 configManager.getAreaWidth(), configManager.getAreaHeight());
 
         // 标记初始化完成
-        initialized.set(true);
+        initLatch.countDown();
 
         Log.i(TAG, "MirrorOverlayService started, overlay added (uinput="
                 + touchRedirector.isUinputMode() + ")");
@@ -112,20 +113,13 @@ public class MirrorOverlayService extends Service {
 
             if (action != null) {
                 // 等待初始化完成后再处理 Action 指令
-                if (!initialized.get()) {
-                    Log.w(TAG, "Service not yet initialized, deferring action: " + action);
-                    // 短暂延迟后重试（简单自旋等待，通常 < 1ms）
-                    try {
-                        int waited = 0;
-                        while (!initialized.get() && waited < 100) {
-                            Thread.sleep(1);
-                            waited++;
-                        }
-                    } catch (InterruptedException ignored) {}
-                }
-
-                if (!initialized.get()) {
-                    Log.e(TAG, "Service initialization timed out, ignoring action: " + action);
+                try {
+                    if (!initLatch.await(500, TimeUnit.MILLISECONDS)) {
+                        Log.e(TAG, "Service initialization timed out, ignoring action: " + action);
+                        return START_STICKY;
+                    }
+                } catch (InterruptedException e) {
+                    Log.e(TAG, "Interrupted waiting for init, ignoring action: " + action);
                     return START_STICKY;
                 }
 

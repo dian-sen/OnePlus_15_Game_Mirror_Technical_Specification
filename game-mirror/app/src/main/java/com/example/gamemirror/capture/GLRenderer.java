@@ -14,6 +14,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
+
 /**
  * OpenGL ES 渲染器
  * 使用 GPU 直接在显存中裁剪 A 区域并渲染到 B 悬浮窗

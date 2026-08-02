@@ -71,7 +71,7 @@ public class MainActivity extends Activity {
 
         // 状态面板
         statusText = new TextView(this);
-        statusText.setText("状态：就绪（一加15 / ColorOS）\n版本：1.0.2");
+        statusText.setText("状态：就绪（一加15 / ColorOS）\n版本：1.0.6");
         statusText.setTextSize(14);
         statusText.setPadding(0, 0, 0, 24);
         layout.addView(statusText);
