@@ -177,7 +177,6 @@ bool TouchInjector::injectMultiTouchUp(int slotId) {
     sendEvent(EV_ABS, ABS_MT_TRACKING_ID, -1);
 
     activeSlots_--;
-    // 仅当所有 slot 都抬起时才发送 BTN_TOUCH=0，避免影响其他活跃触点
     if (activeSlots_ <= 0) {
         activeSlots_ = 0;
         sendEvent(EV_KEY, BTN_TOUCH, 0);
@@ -196,15 +195,12 @@ bool TouchInjector::injectSwipe(int fromX, int fromY, int toX, int toY,
     if (fd_ < 0) return false;
     if (steps < 1) steps = 1;
 
-    // Down
     if (!injectMultiTouchDown(fromX, fromY, slotId, trackingId)) {
         return false;
     }
 
-    // 微延迟确保 Down 事件被处理
     usleep(2000);
 
-    // Move 步骤
     float stepX = (float)(toX - fromX) / steps;
     float stepY = (float)(toY - fromY) / steps;
 
@@ -216,11 +212,10 @@ bool TouchInjector::injectSwipe(int fromX, int fromY, int toX, int toY,
             return false;
         }
         if (i < steps) {
-            usleep(1500); // 步间延迟 ~1.5ms
+            usleep(1500);
         }
     }
 
-    // Up
     usleep(2000);
     return injectMultiTouchUp(slotId);
 }
@@ -247,7 +242,6 @@ void TouchInjector::sendEvent(int type, int code, int value) {
     ev.code = code;
     ev.value = value;
 
-    // 非阻塞写入重试逻辑：处理部分写入和 EAGAIN
     ssize_t written = 0;
     ssize_t total = sizeof(ev);
     char* buf = reinterpret_cast<char*>(&ev);
@@ -262,10 +256,9 @@ void TouchInjector::sendEvent(int type, int code, int value) {
             LOGE("sendEvent: write returned 0 (fd closed?)");
             break;
         } else {
-            // n < 0: error
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 retries++;
-                usleep(500); // 等待 0.5ms 后重试
+                usleep(500);
                 continue;
             }
             LOGE("sendEvent: write failed: %s", strerror(errno));
@@ -299,7 +292,7 @@ bool TouchInjector::createUinputDevice() {
     ioctl(uinputFd_, UI_SET_ABSBIT, ABS_MT_TOUCH_MAJOR);
     ioctl(uinputFd_, UI_SET_ABSBIT, ABS_MT_PRESSURE);
 
-    // 设置 ABS 参数范围（一加 15 屏幕分辨率 1280x2800）
+    // 设置 ABS 参数范围
     struct uinput_abs_setup absSetup;
     memset(&absSetup, 0, sizeof(absSetup));
 
@@ -338,7 +331,6 @@ bool TouchInjector::createUinputDevice() {
     usetup.id.product = PRODUCT_TOUCH_MIRROR;
     usetup.id.version = VERSION_TOUCH_MIRROR;
 
-    // 创建设备
     if (ioctl(uinputFd_, UI_DEV_SETUP, &usetup) < 0) {
         LOGE("UI_DEV_SETUP failed: %s", strerror(errno));
         close(uinputFd_);
@@ -390,7 +382,6 @@ std::string TouchInjector::findTouchDevice() {
             continue;
         }
 
-        // 优先匹配名称包含 "touchscreen" 或 "synaptics" 的设备
         char name[256] = {0};
         int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
         if (fd >= 0) {
@@ -406,7 +397,6 @@ std::string TouchInjector::findTouchDevice() {
             close(fd);
         }
 
-        // 记录第一个匹配设备作为回退
         if (bestDevice.empty()) {
             bestDevice = path;
         }
@@ -425,7 +415,6 @@ bool TouchInjector::isTouchDevice(const std::string& path) {
         return false;
     }
 
-    // 检查 ABS 能力位
     unsigned long absBits[KEY_CNT / (sizeof(unsigned long) * 8) + 1];
     memset(absBits, 0, sizeof(absBits));
 
@@ -444,7 +433,6 @@ bool TouchInjector::isTouchDevice(const std::string& path) {
         return false;
     }
 
-    // 检查 KEY 能力位
     unsigned long keyBits[KEY_CNT / (sizeof(unsigned long) * 8) + 1];
     memset(keyBits, 0, sizeof(keyBits));
 

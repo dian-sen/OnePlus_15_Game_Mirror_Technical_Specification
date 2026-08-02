@@ -15,13 +15,12 @@ import com.example.gamemirror.config.ConfigManager;
 import com.example.gamemirror.touch.TouchRedirector;
 
 /**
- * 悬浮窗 Overlay 容器 View
- * 负责 B 区域的渲染与触控事件拦截
+ * 悬浮窗 Overlay 容器 View — B 区域的渲染与触控事件拦截
  *
  * 包含：
  * - GLSurfaceView：GPU 渲染 A 区域裁剪画面
  * - 双指缩放 / 双击重置 / 边缘吸附
- * - 镜像模式切换（长按循环）
+ * - 镜像模式切换（Action 指令触发）
  * - ConfigManager 持久化
  */
 public class MirrorOverlayView extends FrameLayout {
@@ -74,11 +73,9 @@ public class MirrorOverlayView extends FrameLayout {
         this.touchRedirector = redirector;
         this.configManager = config;
 
-        // 从配置加载尺寸
         viewWidth = config.getOverlayWidth();
         viewHeight = config.getOverlayHeight();
 
-        // 创建 GLSurfaceView 用于 GPU 渲染
         glSurfaceView = new GLSurfaceView(context);
         glSurfaceView.setEGLContextClientVersion(2);
         glRenderer = new GLRenderer();
@@ -88,14 +85,11 @@ public class MirrorOverlayView extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 应用配置的镜像模式
         glRenderer.setMirrorMode(config.getMirrorMode());
         glRenderer.setTargetFrameRate(config.getFrameRate());
 
-        // 设置触控监听
         setupTouchListener();
 
-        // 配置 WindowManager 参数
         layoutParams = new WindowManager.LayoutParams(
                 viewWidth,
                 viewHeight,
@@ -114,7 +108,6 @@ public class MirrorOverlayView extends FrameLayout {
     /**
      * 设置触控事件监听
      * - 单击（无移动）→ 触控重定向到 A 区域
-     * - 长按 300ms+ → 循环切换镜像模式
      * - 单指拖拽 → 移动悬浮窗
      * - 双指缩放 → 调整悬浮窗大小
      * - 双击 → 重置到默认尺寸
@@ -129,10 +122,8 @@ public class MirrorOverlayView extends FrameLayout {
                     initialWindowY = layoutParams.y;
                     isDragging = false;
 
-                    // 双击检测
                     long now = System.currentTimeMillis();
                     if (now - lastTapTime < DOUBLE_TAP_INTERVAL) {
-                        // 取消延迟重定向，执行双击重置
                         if (pendingRedirect != null) {
                             touchHandler.removeCallbacks(pendingRedirect);
                             pendingRedirect = null;
@@ -153,7 +144,6 @@ public class MirrorOverlayView extends FrameLayout {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-                    // 双指缩放
                     if (isPinching && event.getPointerCount() == 2) {
                         float newDist = pinchDistance(event);
                         if (lastPinchDist > 0) {
@@ -168,7 +158,6 @@ public class MirrorOverlayView extends FrameLayout {
                         return true;
                     }
 
-                    // 单指拖拽
                     float dx = event.getRawX() - initialTouchX;
                     float dy = event.getRawY() - initialTouchY;
                     if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
@@ -188,20 +177,17 @@ public class MirrorOverlayView extends FrameLayout {
                     if (isPinching) {
                         isPinching = false;
                         lastPinchDist = 0;
-                        // 保存尺寸和位置
                         configManager.setOverlaySize(viewWidth, viewHeight);
                         configManager.setOverlayPosition(layoutParams.x, layoutParams.y);
                         return true;
                     }
 
                     if (!isDragging) {
-                        // 非拖拽 → 短按延迟后触控重定向（区分悬浮窗操作与游戏触控）
                         final float bx = event.getX();
                         final float by = event.getY();
                         pendingRedirectX = bx;
                         pendingRedirectY = by;
 
-                        // 取消之前的延迟任务
                         if (pendingRedirect != null) {
                             touchHandler.removeCallbacks(pendingRedirect);
                         }
@@ -213,7 +199,6 @@ public class MirrorOverlayView extends FrameLayout {
                         };
                         touchHandler.postDelayed(pendingRedirect, TOUCH_REDIRECT_DELAY_MS);
                     } else {
-                        // 边缘吸附
                         snapToEdge();
                         configManager.setOverlayPosition(layoutParams.x, layoutParams.y);
                     }
@@ -231,7 +216,6 @@ public class MirrorOverlayView extends FrameLayout {
         if (screenW <= 0) return;
 
         int x = layoutParams.x;
-        int halfW = viewWidth / 2;
 
         if (x < EDGE_SNAP_THRESHOLD) {
             layoutParams.x = SNAP_MARGIN;

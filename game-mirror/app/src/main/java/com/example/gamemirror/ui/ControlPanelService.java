@@ -42,20 +42,17 @@ public class ControlPanelService extends Service {
     }
 
     private void createControlPanel() {
-        // 悬浮球容器
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(8, 8, 8, 8);
         panel.setAlpha(0.7f);
 
-        // 开关悬浮窗按钮
         Button toggleBtn = new Button(this);
         toggleBtn.setText("显示/隐藏");
         toggleBtn.setTextSize(10);
         toggleBtn.setOnClickListener(v -> toggleOverlay());
         panel.addView(toggleBtn);
 
-        // 框选模式按钮
         Button selectBtn = new Button(this);
         selectBtn.setText("框选");
         selectBtn.setTextSize(10);
@@ -81,8 +78,6 @@ public class ControlPanelService extends Service {
     private void toggleOverlay() {
         Intent intent = new Intent(this, MirrorOverlayService.class);
         if (overlayRunning) {
-            // 发送 ACTION_STOP 指令让服务自行 stopSelf()，
-            // stopService() 无法可靠停止前台服务
             intent.setAction(MirrorOverlayService.ACTION_STOP);
             startService(intent);
             overlayRunning = false;
@@ -97,7 +92,6 @@ public class ControlPanelService extends Service {
     }
 
     private void enterSelectionMode() {
-        // TODO: 启动全屏透明框选界面
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         intent.putExtra("selection_mode", true);

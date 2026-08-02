@@ -3,8 +3,7 @@ package com.example.gamemirror.touch;
 import android.util.Log;
 
 /**
- * 触控映射重定向器
- * 将 B 悬浮窗的触控事件映射到屏幕 A 区域
+ * 触控映射重定向器 — 将 B 悬浮窗的触控事件映射到屏幕 A 区域
  *
  * 坐标转换公式：
  *   xA = Ax + dx * (Aw / Bw)
@@ -13,6 +12,7 @@ import android.util.Log;
  * 触控注入策略：
  * - uinput 虚拟设备（首选，vendor=0x1A15 一加15 标识）
  * - /dev/input/event* 物理设备直写（回退）
+ * - InputManager.injectInputEvent（最后回退）
  * - 目标延迟 ≤ 3ms
  */
 public class TouchRedirector {
@@ -30,7 +30,6 @@ public class TouchRedirector {
     private boolean nativeInitialized = false;
     private boolean isUinput = false;
 
-    // Context 引用（用于 InputManager 回退方案，避免隐藏 API）
     private final android.content.Context appContext;
 
     // 独立 Slot ID（避免与游戏主操作冲突）
@@ -45,9 +44,6 @@ public class TouchRedirector {
         }
     }
 
-    /**
-     * @param context 应用 Context（由 MirrorOverlayService 注入）
-     */
     public TouchRedirector(android.content.Context context) {
         this.appContext = context.getApplicationContext();
         nativeHandle = nativeInit();
@@ -81,14 +77,6 @@ public class TouchRedirector {
 
     /**
      * 将 B 区域滑动操作重定向到 A 区域
-     *
-     * @param fromBX   B 悬浮窗内起始 X
-     * @param fromBY   B 悬浮窗内起始 Y
-     * @param toBX     B 悬浮窗内目标 X
-     * @param toBY     B 悬浮窗内目标 Y
-     * @param bw       B 悬浮窗当前宽度
-     * @param bh       B 悬浮窗当前高度
-     * @param steps    滑动步数
      */
     public void redirectSwipe(float fromBX, float fromBY, float toBX, float toBY,
                               int bw, int bh, int steps) {
@@ -111,9 +99,6 @@ public class TouchRedirector {
         }
     }
 
-    /**
-     * 通过 Native 层注入点击事件
-     */
     private void injectTouchNative(int xA, int yA) {
         nativeInjectTouch(nativeHandle, xA, yA, MIRROR_SLOT_ID, MIRROR_TRACKING_ID);
     }
@@ -158,7 +143,6 @@ public class TouchRedirector {
 
             long downTime = android.os.SystemClock.uptimeMillis();
 
-            // Down
             android.view.MotionEvent down = android.view.MotionEvent.obtain(
                     downTime, downTime,
                     android.view.MotionEvent.ACTION_DOWN,
@@ -166,7 +150,6 @@ public class TouchRedirector {
             im.injectInputEvent(down, android.hardware.input.InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
             down.recycle();
 
-            // Move steps
             float stepX = (float)(toX - fromX) / steps;
             float stepY = (float)(toY - fromY) / steps;
             for (int i = 1; i <= steps; i++) {
@@ -183,7 +166,6 @@ public class TouchRedirector {
                 }
             }
 
-            // Up
             android.view.MotionEvent up = android.view.MotionEvent.obtain(
                     downTime, downTime + (long)(steps * 10) + 50,
                     android.view.MotionEvent.ACTION_UP,

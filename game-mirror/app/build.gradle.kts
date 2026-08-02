@@ -1,18 +1,17 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "com.example.gamemirror"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.gamemirror"
         minSdk = 30
-        targetSdk = 34
-        versionCode = 7
-        versionName = "1.0.6"
+        targetSdk = 35
+        versionCode = 8
+        versionName = "1.0.2"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -55,7 +54,5 @@ android {
 }
 
 dependencies {
-    implementation(project(":xposed"))
     implementation("io.github.libxposed:api:102")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
 }

@@ -6,7 +6,7 @@
 #include <vector>
 
 /**
- * 触控注入器 - 一加 15 (OnePlus 15) 适配
+ * 触控注入器 — 一加 15 (OnePlus 15) 适配
  *
  * 双策略触控注入：
  * 1. uinput 虚拟设备（首选，vendor=0x1A15，系统原生识别）
@@ -37,7 +37,7 @@ public:
     bool injectClick(int x, int y, int slotId, int trackingId);
 
     /**
-     * 注入多点触控（Down 阶段，不 Up）
+     * 注入多点触控 Down（不 Up）
      * @param x          屏幕绝对 X 坐标
      * @param y          屏幕绝对 Y 坐标
      * @param slotId     Slot ID（0~9）
@@ -101,7 +101,7 @@ private:
     int fd_;               // 当前使用的设备文件描述符
     std::string device_;   // 设备路径
     bool isUinput_;        // 是否使用 uinput 虚拟设备
-    int uinputFd_;         // uinput 设备 fd（与 fd_ 指向同一设备时相同）
+    int uinputFd_;         // uinput 设备 fd
     int maxSlots_;         // 最大触控点数
     int activeSlots_;      // 当前活跃的触控点数（用于 BTN_TOUCH 管理）
 };

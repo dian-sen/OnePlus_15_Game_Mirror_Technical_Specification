@@ -14,12 +14,15 @@ import io.github.libxposed.api.annotations.XposedHooker;
  * GameMirror LSPosed 模块 (API 102)
  * 核心功能：Hook 系统权限校验，实现无感后台录屏与触控注入
  *
- * 5 类 Hook 策略：
- * 1. MediaProjection 权限自动授予
- * 2. AOSP 录屏弹窗静默化
- * 3. ColorOS/Oplus 录屏通知抑制
- * 4. OplusWMS 悬浮窗权限绕过（ColorOS 适配）
- * 5. InputManager INJECT_EVENTS 权限提升
+ * 8 类 Hook 策略覆盖 AOSP + ColorOS 双路径：
+ * 1. ScreenCapturePermissionBypass   — MediaProjectionManagerService.hasPermission → 强制 true
+ * 2. InjectPermissionBypass          — InputManagerService.checkInjectPermissions → 跳过
+ * 3. OplusWhitelistBypass            — OplusWindowManagerService.isAppInWhiteList → 强制 true
+ * 4. OplusBlockSuppressor            — OplusScreenShield.isBlocked → 强制 false
+ * 5. MediaProjectionPermissionGrant  — MediaProjectionPermissionActivity 静默化
+ * 6. SuppressNotification            — MediaProjectionMetricsLogger.notifyProjectionStart → 拦截
+ * 7. OplusDialogSuppressor           — OplusScreenRecordDialog 构造 → 抑制
+ * 8. OplusIndicatorSuppressor        — OplusMediaProjectionIndicator.show → 抑制
  *
  * 目标设备：一加 15 (OnePlus 15) / ColorOS / Android 15+
  */
@@ -63,10 +66,8 @@ public class GameMirrorModule extends XposedModule {
         try {
             Class<?> serviceClass = classLoader.loadClass(
                     "com.android.server.media.projection.MediaProjectionManagerService");
-
             hookAllMethods(serviceClass, "hasPermission",
                     ScreenCapturePermissionBypass.class);
-
             Log.i(TAG, "Hooked MediaProjectionManagerService.hasPermission");
         } catch (ClassNotFoundException e) {
             Log.e(TAG, "Failed to hook MediaProjectionManagerService: " + e.getMessage());
@@ -75,17 +76,13 @@ public class GameMirrorModule extends XposedModule {
 
     // ========================================================================
     // 2. Hook InputManager - INJECT_EVENTS 权限提升
-    // 使 InputManager.injectInputEvent 在无系统签名时也能工作
     // ========================================================================
     private void hookInputManagerPermission(ClassLoader classLoader) {
         try {
-            // AOSP InputManagerService checkInjectPermissions
             Class<?> imsClass = classLoader.loadClass(
                     "com.android.server.input.InputManagerService");
-
             hookAllMethods(imsClass, "checkInjectPermissions",
                     InjectPermissionBypass.class);
-
             Log.i(TAG, "Hooked InputManagerService.checkInjectPermissions");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "Failed to hook InputManagerService: " + e.getMessage());
@@ -94,17 +91,14 @@ public class GameMirrorModule extends XposedModule {
 
     // ========================================================================
     // 3. Hook OplusWMS - ColorOS 悬浮窗权限绕过
-    // 一加 ColorOS 使用 OplusWindowManagerService 管理悬浮窗白名单
     // ========================================================================
     private void hookOplusWMSOverlay(ClassLoader classLoader) {
         // 路径 1: OplusWindowManagerService（ColorOS 12+）
         try {
             Class<?> oplusWmsClass = classLoader.loadClass(
                     "com.android.server.wm.OplusWindowManagerService");
-
             hookAllMethods(oplusWmsClass, "isAppInWhiteList",
                     OplusWhitelistBypass.class);
-
             Log.i(TAG, "Hooked OplusWindowManagerService.isAppInWhiteList");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "OplusWindowManagerService not found (non-ColorOS device?)");
@@ -114,10 +108,8 @@ public class GameMirrorModule extends XposedModule {
         try {
             Class<?> oplusShieldClass = classLoader.loadClass(
                     "com.oplus.screen.OplusScreenShield");
-
             hookAllMethods(oplusShieldClass, "isBlocked",
                     OplusBlockSuppressor.class);
-
             Log.i(TAG, "Hooked OplusScreenShield.isBlocked");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "OplusScreenShield not found (expected on older ColorOS)");
@@ -128,27 +120,21 @@ public class GameMirrorModule extends XposedModule {
     // 4. Hook AOSP SystemUI 录屏弹窗
     // ========================================================================
     private void hookAOSPDialogs(ClassLoader classLoader) {
-        // MediaProjection 权限弹窗
         try {
             Class<?> permActivityClass = classLoader.loadClass(
                     "com.android.systemui.mediaprojection.MediaProjectionPermissionActivity");
-
             hookAllConstructors(permActivityClass,
                     MediaProjectionPermissionGrant.class);
-
             Log.i(TAG, "Hooked MediaProjectionPermissionActivity");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "MediaProjectionPermissionActivity not found: " + e.getMessage());
         }
 
-        // 录屏状态栏通知
         try {
             Class<?> projectionClass = classLoader.loadClass(
                     "com.android.systemui.mediaprojection.MediaProjectionMetricsLogger");
-
             hookAllMethods(projectionClass, "notifyProjectionStart",
                     SuppressNotification.class);
-
             Log.i(TAG, "Hooked MediaProjectionMetricsLogger");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "MediaProjectionMetricsLogger not found: " + e.getMessage());
@@ -159,27 +145,21 @@ public class GameMirrorModule extends XposedModule {
     // 5. Hook ColorOS/Oplus SystemUI 录屏弹窗
     // ========================================================================
     private void hookOplusDialogs(ClassLoader classLoader) {
-        // ColorOS 录屏倒计时/确认弹窗
         try {
             Class<?> oplusRecordClass = classLoader.loadClass(
                     "com.oplus.screenrecord.OplusScreenRecordDialog");
-
             hookAllConstructors(oplusRecordClass,
                     OplusDialogSuppressor.class);
-
             Log.i(TAG, "Hooked OplusScreenRecordDialog");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "OplusScreenRecordDialog not found (expected on ColorOS)");
         }
 
-        // ColorOS 状态栏录屏指示器
         try {
             Class<?> oplusIndicatorClass = classLoader.loadClass(
                     "com.android.systemui.mediaprojection.OplusMediaProjectionIndicator");
-
             hookAllMethods(oplusIndicatorClass, "show",
                     OplusIndicatorSuppressor.class);
-
             Log.i(TAG, "Hooked OplusMediaProjectionIndicator.show");
         } catch (ClassNotFoundException e) {
             Log.w(TAG, "OplusMediaProjectionIndicator not found");
@@ -191,7 +171,6 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class ScreenCapturePermissionBypass implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
             param.setResult(true);
@@ -203,10 +182,8 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class InjectPermissionBypass implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
-            // 跳过权限检查，允许注入
             param.setResult(null);
         }
     }
@@ -216,10 +193,8 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class OplusWhitelistBypass implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
-            // 始终返回 true，使应用在悬浮窗白名单中
             param.setResult(true);
         }
     }
@@ -229,10 +204,8 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class OplusBlockSuppressor implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
-            // 阻止录屏屏蔽
             param.setResult(false);
         }
     }
@@ -242,7 +215,6 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class MediaProjectionPermissionGrant implements XposedInterface.Hooker {
-
         @AfterInvocation
         public static void afterInvoke(@NonNull AfterHookParam param) {
             Log.d(TAG, "MediaProjectionPermissionActivity constructed, auto-granting...");
@@ -254,7 +226,6 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class SuppressNotification implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
             param.setResult(null);
@@ -262,14 +233,12 @@ public class GameMirrorModule extends XposedModule {
     }
 
     // ========================================================================
-    // Hooker 类 7: ColorOS 录屏弹窗抑制（BeforeInvocation 阻止构造）
+    // Hooker 类 7: ColorOS 录屏弹窗抑制
     // ========================================================================
     @XposedHooker
     public static class OplusDialogSuppressor implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
-            // 阻止 OplusScreenRecordDialog 构造，真正抑制弹窗
             param.setResult(null);
             Log.d(TAG, "OplusScreenRecordDialog suppressed");
         }
@@ -280,7 +249,6 @@ public class GameMirrorModule extends XposedModule {
     // ========================================================================
     @XposedHooker
     public static class OplusIndicatorSuppressor implements XposedInterface.Hooker {
-
         @BeforeInvocation
         public static void beforeInvoke(@NonNull BeforeHookParam param) {
             param.setResult(null);

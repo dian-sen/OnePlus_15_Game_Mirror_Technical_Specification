@@ -4,10 +4,11 @@ plugins {
 
 android {
     namespace = "com.example.gamemirror.xposed"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 30
+        consumerProguardFiles("consumer-rules.pro")
     }
 
     compileOptions {

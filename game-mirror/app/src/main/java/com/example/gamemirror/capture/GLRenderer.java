@@ -18,11 +18,10 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 /**
- * OpenGL ES 渲染器
- * 使用 GPU 直接在显存中裁剪 A 区域并渲染到 B 悬浮窗
+ * OpenGL ES 渲染器 — GPU 显存内裁剪 + uMirror 镜像翻转
  * 基于 OES_EGL_image_external 扩展，零 CPU 内存拷贝
  *
- * 一加 15 适配：165Hz 帧率同步，uMirror 镜像翻转，自适应帧率 + FPS 统计
+ * 一加 15 适配：165Hz 帧率同步，自适应帧率 + FPS 统计
  */
 public class GLRenderer implements GLSurfaceView.Renderer {
 
@@ -39,7 +38,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
             "  vTexCoord = aTexCoord;\n" +
             "}";
 
-    // 片段着色器：uCropRect 裁剪 + uMirror 镜像翻转
+    // 片段着色器 — uCropRect 裁剪 + uMirror 镜像翻转
     // uMirror: 0=无, 1=水平, 2=垂直, 3=双向
     private static final String FRAGMENT_SHADER =
             "#extension GL_OES_EGL_image_external : require\n" +
@@ -100,7 +99,6 @@ public class GLRenderer implements GLSurfaceView.Renderer {
     private static final long MAX_FRAME_INTERVAL_NS = 33_333_333L; // ~30Hz min
 
     // FPS 统计
-    private long fpsStartTimeNs = 0;
     private int fpsFrameCount = 0;
     private float currentFps = 0.0f;
     private long lastFpsUpdateNs = 0;
@@ -149,8 +147,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
         uMirrorLoc = GLES20.glGetUniformLocation(program, "uMirror");
 
         Matrix.setIdentityM(mvpMatrix, 0);
-        fpsStartTimeNs = System.nanoTime();
-        fpsFrameCount = 0;
+        lastFpsUpdateNs = System.nanoTime();
 
         Log.i(TAG, "OpenGL ES renderer initialized, textureId=" + textureId);
     }
@@ -176,7 +173,7 @@ public class GLRenderer implements GLSurfaceView.Renderer {
         // FPS 统计
         fpsFrameCount++;
         long fpsElapsed = now - lastFpsUpdateNs;
-        if (fpsElapsed >= 1_000_000_000L) { // 每秒更新一次
+        if (fpsElapsed >= 1_000_000_000L) {
             currentFps = fpsFrameCount * 1_000_000_000.0f / fpsElapsed;
             fpsFrameCount = 0;
             lastFpsUpdateNs = now;
@@ -269,7 +266,6 @@ public class GLRenderer implements GLSurfaceView.Renderer {
 
     /**
      * 释放 GL 资源（纹理、Shader Program）
-     * 应在不再需要渲染时调用，防止 GPU 资源泄漏
      */
     public void release() {
         if (surface != null) {

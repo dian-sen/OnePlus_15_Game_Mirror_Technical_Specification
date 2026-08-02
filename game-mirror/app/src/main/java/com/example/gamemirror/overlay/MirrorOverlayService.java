@@ -21,18 +21,15 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 悬浮窗 Overlay 服务
- * 管理 B 区域悬浮窗的生命周期，协调画面采集与触控映射
+ * 悬浮窗 Overlay 服务 — 管理 B 区域悬浮窗的生命周期，协调画面采集与触控映射
  *
  * 支持 Action 指令：
- * - toggle_mirror ：切换镜像模式
- * - increase_alpha ：增加透明度
- * - decrease_alpha ：降低透明度
- * - stop ：停止服务
+ * - TOGGLE_MIRROR : 循环切换镜像模式
+ * - INCREASE_ALPHA : 透明度 +0.05
+ * - DECREASE_ALPHA : 透明度 -0.05
+ * - STOP : 停止服务
  *
- * 一加 15 ColorOS 适配：
- * - 前台服务保证后台存活
- * - ConfigManager 持久化配置
+ * 一加 15 ColorOS 适配：前台服务 + ConfigManager 持久化
  */
 public class MirrorOverlayService extends Service {
 
@@ -53,7 +50,6 @@ public class MirrorOverlayService extends Service {
     private TouchRedirector touchRedirector;
     private ConfigManager configManager;
 
-    // 初始化完成同步锁（防止 onStartCommand 在 onCreate 完成前处理 Intent）
     private final CountDownLatch initLatch = new CountDownLatch(1);
 
     @Override
@@ -66,23 +62,19 @@ public class MirrorOverlayService extends Service {
         touchRedirector = new TouchRedirector(this);
         captureManager = new ScreenCaptureManager(this);
 
-        // 记录屏幕尺寸
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         configManager.setScreenSize(metrics.widthPixels, metrics.heightPixels);
 
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, buildNotification());
 
-        // 创建并添加悬浮窗，传入 ConfigManager
         overlayView = new MirrorOverlayView(this, windowManager, touchRedirector, configManager);
         windowManager.addView(overlayView, overlayView.getLayoutParams());
 
-        // 应用 A 区域配置到触控重定向器
         touchRedirector.setArea(
                 configManager.getAreaX(), configManager.getAreaY(),
                 configManager.getAreaWidth(), configManager.getAreaHeight());
 
-        // 标记初始化完成
         initLatch.countDown();
 
         Log.i(TAG, "MirrorOverlayService started, overlay added (uinput="
@@ -112,7 +104,6 @@ public class MirrorOverlayService extends Service {
             String action = intent.getAction();
 
             if (action != null) {
-                // 等待初始化完成后再处理 Action 指令
                 try {
                     if (!initLatch.await(500, TimeUnit.MILLISECONDS)) {
                         Log.e(TAG, "Service initialization timed out, ignoring action: " + action);
@@ -146,9 +137,9 @@ public class MirrorOverlayService extends Service {
             }
 
             // 检查是否有 MediaProjection 数据
-            if (intent.hasExtra("data")) {
+            if (intent.hasExtra("intent_clone")) {
                 int resultCode = intent.getIntExtra("resultCode", -1);
-                Intent data = intent.getParcelableExtra("data", Intent.class);
+                Intent data = (Intent) intent.getParcelableExtra("intent_clone");
                 if (data != null) {
                     startScreenCapture(data, resultCode);
                 }
@@ -164,7 +155,6 @@ public class MirrorOverlayService extends Service {
             if (overlayView.isAttachedToWindow()) {
                 windowManager.removeView(overlayView);
             }
-            // 释放 GL 资源（纹理、Shader Program）
             overlayView.getGLRenderer().release();
         }
         if (captureManager != null) {

@@ -16,10 +16,12 @@ import android.view.Surface;
 
 /**
  * 画面采集管理器
- * 基于 MediaProjection + VirtualDisplay + Surface
- * 实现无感后台录屏，支持 165Hz 高帧率
+ * 基于 MediaProjection + VirtualDisplay + Surface，实现无感后台录屏
  *
- * 一加 15 适配：通过 LSPosed 模块免弹窗授权，ColorOS 下静默采集
+ * 一加 15 适配：
+ * - 通过 LSPosed 模块免弹窗授权
+ * - ColorOS 下静默采集
+ * - 支持 165Hz 高帧率
  */
 public class ScreenCaptureManager {
 
@@ -27,17 +29,15 @@ public class ScreenCaptureManager {
     private static final float TARGET_FRAME_RATE = 165.0f;
 
     private final Context context;
-    private MediaProjectionManager projectionManager;
+    private final MediaProjectionManager projectionManager;
+
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
-    private Surface inputSurface;
-
     private HandlerThread captureThread;
     private Handler captureHandler;
 
     private boolean isCapturing = false;
 
-    // 屏幕实际尺寸（动态获取）
     private int screenWidth;
     private int screenHeight;
 
@@ -52,25 +52,25 @@ public class ScreenCaptureManager {
         this.projectionManager = (MediaProjectionManager)
                 context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
 
-        // 动态获取设备实际屏幕分辨率
         DisplayMetrics metrics = context.getResources().getDisplayMetrics();
         this.screenWidth = metrics.widthPixels;
         this.screenHeight = metrics.heightPixels;
     }
 
     /**
-     * 启动画面采集（需要先在 PermissionActivity 中获取 MediaProjection Intent）
+     * 启动画面采集
+     * @param mediaProjectionIntent PermissionActivity 返回的 MediaProjection Intent
+     * @param resultCode            权限请求结果码
+     * @param outputSurface         OpenGL Surface 输出目标
      */
-    public boolean startCapture(Intent mediaProjectionData, int resultCode, Surface outputSurface) {
-        if (mediaProjectionData == null || resultCode != Activity.RESULT_OK) {
+    public boolean startCapture(Intent mediaProjectionIntent, int resultCode, Surface outputSurface) {
+        if (mediaProjectionIntent == null || resultCode != Activity.RESULT_OK) {
             Log.e(TAG, "Invalid MediaProjection data");
             return false;
         }
 
         try {
-            // 通过 LSPosed Hook 后此处 getMediaProjection 不会弹窗
-            mediaProjection = projectionManager.getMediaProjection(resultCode, mediaProjectionData);
-
+            mediaProjection = projectionManager.getMediaProjection(resultCode, mediaProjectionIntent);
             if (mediaProjection == null) {
                 Log.e(TAG, "Failed to get MediaProjection (ensure LSPosed module is active)");
                 return false;
@@ -91,7 +91,7 @@ public class ScreenCaptureManager {
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR
                             | DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
                     outputSurface,
-                    null,   // VirtualDisplay.Callback
+                    null,
                     captureHandler
             );
 
@@ -138,8 +138,7 @@ public class ScreenCaptureManager {
 
     /**
      * 更新 A 区域（源裁剪区域）参数
-     * 注意：裁剪由 GLRenderer 在 GPU 层面通过 UV 坐标完成，
-     * VirtualDisplay 保持全屏分辨率不变，避免双重裁剪。
+     * 裁剪由 GLRenderer 在 GPU 层面通过 UV 坐标完成，VirtualDisplay 保持全屏分辨率
      */
     public void setCropArea(int x, int y, int width, int height) {
         this.areaX = x;

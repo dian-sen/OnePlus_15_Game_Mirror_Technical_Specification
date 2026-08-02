@@ -23,8 +23,7 @@ import com.example.gamemirror.overlay.MirrorOverlayService;
 import com.example.gamemirror.ui.AreaSelectionView;
 
 /**
- * 主入口 Activity
- * 一加 15 GameMirror 控制面板
+ * 主入口 Activity — 一加 15 GameMirror 控制面板
  *
  * 功能：
  * - 录屏权限请求
@@ -39,14 +38,6 @@ public class MainActivity extends Activity {
     private static final int REQUEST_SCREEN_CAPTURE = 1002;
 
     private TextView statusText;
-    private Button startButton;
-    private Button overlayButton;
-    private Button selectButton;
-    private Button mirrorButton;
-    private Button alphaUpButton;
-    private Button alphaDownButton;
-    private Button stopButton;
-
     private ConfigManager configManager;
     private AreaSelectionView selectionView;
     private boolean isSelectionMode = false;
@@ -58,7 +49,6 @@ public class MainActivity extends Activity {
         setContentView(createLayout());
         checkBatteryOptimization();
 
-        // 检查是否从快捷方式进入框选模式
         if (getIntent().getBooleanExtra("selection_mode", false)) {
             enterSelectionMode();
         }
@@ -71,25 +61,25 @@ public class MainActivity extends Activity {
 
         // 状态面板
         statusText = new TextView(this);
-        statusText.setText("状态：就绪（一加15 / ColorOS）\n版本：1.0.6");
+        statusText.setText("状态：就绪（一加15 / ColorOS）\n版本：1.0.2");
         statusText.setTextSize(14);
         statusText.setPadding(0, 0, 0, 24);
         layout.addView(statusText);
 
         // 录屏权限
-        startButton = new Button(this);
+        Button startButton = new Button(this);
         startButton.setText("启动录屏权限");
         startButton.setOnClickListener(v -> requestScreenCapture());
         layout.addView(startButton);
 
         // 悬浮窗
-        overlayButton = new Button(this);
+        Button overlayButton = new Button(this);
         overlayButton.setText("打开悬浮窗");
         overlayButton.setOnClickListener(v -> openOverlay());
         layout.addView(overlayButton);
 
         // 框选A区域
-        selectButton = new Button(this);
+        Button selectButton = new Button(this);
         selectButton.setText("框选A区域");
         selectButton.setOnClickListener(v -> enterSelectionMode());
         layout.addView(selectButton);
@@ -102,7 +92,7 @@ public class MainActivity extends Activity {
         layout.addView(spacer);
 
         // 镜像模式切换
-        mirrorButton = new Button(this);
+        Button mirrorButton = new Button(this);
         mirrorButton.setText("切换镜像模式");
         mirrorButton.setOnClickListener(v -> sendAction(MirrorOverlayService.ACTION_TOGGLE_MIRROR));
         layout.addView(mirrorButton);
@@ -111,12 +101,12 @@ public class MainActivity extends Activity {
         LinearLayout alphaRow = new LinearLayout(this);
         alphaRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        alphaUpButton = new Button(this);
+        Button alphaUpButton = new Button(this);
         alphaUpButton.setText("+透明度");
         alphaUpButton.setOnClickListener(v -> sendAction(MirrorOverlayService.ACTION_INCREASE_ALPHA));
         alphaRow.addView(alphaUpButton);
 
-        alphaDownButton = new Button(this);
+        Button alphaDownButton = new Button(this);
         alphaDownButton.setText("-透明度");
         alphaDownButton.setOnClickListener(v -> sendAction(MirrorOverlayService.ACTION_DECREASE_ALPHA));
         alphaRow.addView(alphaDownButton);
@@ -124,7 +114,7 @@ public class MainActivity extends Activity {
         layout.addView(alphaRow);
 
         // 停止服务
-        stopButton = new Button(this);
+        Button stopButton = new Button(this);
         stopButton.setText("停止服务");
         stopButton.setOnClickListener(v -> sendAction(MirrorOverlayService.ACTION_STOP));
         layout.addView(stopButton);
@@ -133,7 +123,7 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 请求屏幕录制权限
+     * 请求屏幕录制权限（通过透明 PermissionActivity 触发 LSPosed 静默授权）
      */
     private void requestScreenCapture() {
         Intent intent = new Intent(this, PermissionActivity.class);
@@ -141,7 +131,7 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 打开悬浮窗 Overlay
+     * 打开悬浮窗 Overlay 服务
      */
     private void openOverlay() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
@@ -163,18 +153,16 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 进入框选模式（全屏透明选区）
+     * 进入全屏框选模式
      */
     private void enterSelectionMode() {
         if (isSelectionMode) return;
         isSelectionMode = true;
 
-        // 创建全屏框选视图
         selectionView = new AreaSelectionView(this);
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         selectionView.init(metrics.widthPixels, metrics.heightPixels, configManager,
                 (x, y, w, h) -> {
-                    // 确认选择后退出框选模式
                     exitSelectionMode();
                     Toast.makeText(MainActivity.this,
                             "A区域已设置: " + w + "x" + h, Toast.LENGTH_SHORT).show();
@@ -186,7 +174,6 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
         container.addView(selectionView);
-
         setContentView(container);
     }
 
@@ -198,7 +185,6 @@ public class MainActivity extends Activity {
 
     /**
      * 发送 Action 指令到 MirrorOverlayService
-     * 服务已运行时用 startService，未运行时用 startForegroundService
      */
     private void sendAction(String action) {
         Intent intent = new Intent(this, MirrorOverlayService.class);
@@ -213,9 +199,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * 检查指定服务是否正在运行
-     */
     private boolean isServiceRunning(Class<?> serviceClass) {
         ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
         if (manager != null) {
@@ -255,8 +238,7 @@ public class MainActivity extends Activity {
         if (requestCode == REQUEST_SCREEN_CAPTURE && resultCode == RESULT_OK && data != null) {
             Intent serviceIntent = new Intent(this, MirrorOverlayService.class);
             serviceIntent.putExtra("resultCode", data.getIntExtra("resultCode", -1));
-            serviceIntent.putExtra("data",
-                    data.getParcelableExtra("data", Intent.class));
+            serviceIntent.putExtra("intent_clone", (Intent) data.getParcelableExtra("intent_clone"));
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent);
             } else {

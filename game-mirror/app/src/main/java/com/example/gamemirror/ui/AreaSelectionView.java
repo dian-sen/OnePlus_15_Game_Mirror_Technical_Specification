@@ -13,7 +13,7 @@ import android.view.View;
 import com.example.gamemirror.config.ConfigManager;
 
 /**
- * 全屏透明框选视图
+ * 全屏透明框选视图 — 用于选择 A 区域（源区域）
  *
  * 交互方式：
  * - 单指拖拽四角手柄：调整选框大小
@@ -23,17 +23,16 @@ import com.example.gamemirror.config.ConfigManager;
  */
 public class AreaSelectionView extends View {
 
-    // 手柄类型
     private static final int HANDLE_NONE = 0;
-    private static final int HANDLE_TL = 1; // 左上
-    private static final int HANDLE_TR = 2; // 右上
-    private static final int HANDLE_BL = 3; // 左下
-    private static final int HANDLE_BR = 4; // 右下
-    private static final int HANDLE_BODY = 5; // 选框内部（拖拽移动）
+    private static final int HANDLE_TL = 1;
+    private static final int HANDLE_TR = 2;
+    private static final int HANDLE_BL = 3;
+    private static final int HANDLE_BR = 4;
+    private static final int HANDLE_BODY = 5;
 
-    private static final int HANDLE_SIZE = 48;  // 手柄触摸区域大小
-    private static final int HANDLE_RADIUS = 16; // 手柄绘制半径
-    private static final int MIN_SELECTION = 50; // 最小选框尺寸
+    private static final int HANDLE_SIZE = 48;
+    private static final int HANDLE_RADIUS = 16;
+    private static final int MIN_SELECTION = 50;
 
     private final Paint rectPaint;
     private final Paint handlePaint;
@@ -47,11 +46,9 @@ public class AreaSelectionView extends View {
     private float startX, startY;
     private int startLeft, startTop, startRight, startBottom;
 
-    // 双指缩放
     private float lastPinchDist = 0;
     private boolean isPinching = false;
 
-    // 双击检测
     private long lastTapTime = 0;
     private static final long DOUBLE_TAP_INTERVAL = 300;
 
@@ -101,7 +98,6 @@ public class AreaSelectionView extends View {
         this.configManager = config;
         this.listener = l;
 
-        // 从配置恢复上次选区，或使用默认
         int w = configManager.getAreaWidth();
         int h = configManager.getAreaHeight();
         int x = (screenW - w) / 2;
@@ -114,20 +110,16 @@ public class AreaSelectionView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        // 半透明遮罩
         canvas.drawColor(Color.argb(120, 0, 0, 0));
 
-        // 选中区域
         canvas.drawRect(selectionRect, rectPaint);
         canvas.drawRect(selectionRect, dashPaint);
 
-        // 四角手柄
         drawHandle(canvas, selectionRect.left, selectionRect.top);
         drawHandle(canvas, selectionRect.right, selectionRect.top);
         drawHandle(canvas, selectionRect.left, selectionRect.bottom);
         drawHandle(canvas, selectionRect.right, selectionRect.bottom);
 
-        // 尺寸信息
         int w = selectionRect.width();
         int h = selectionRect.height();
         String info = w + " x " + h + "  (双击确认)";
@@ -149,7 +141,6 @@ public class AreaSelectionView extends View {
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                // 双击检测
                 long now = System.currentTimeMillis();
                 if (now - lastTapTime < DOUBLE_TAP_INTERVAL) {
                     confirmSelection();
@@ -212,9 +203,6 @@ public class AreaSelectionView extends View {
         return super.onTouchEvent(event);
     }
 
-    /**
-     * 检测点击命中了哪个手柄
-     */
     private int detectHandle(float x, float y) {
         if (hitTest(x, y, selectionRect.left, selectionRect.top)) return HANDLE_TL;
         if (hitTest(x, y, selectionRect.right, selectionRect.top)) return HANDLE_TR;
@@ -228,9 +216,6 @@ public class AreaSelectionView extends View {
         return Math.abs(x - cx) <= HANDLE_SIZE && Math.abs(y - cy) <= HANDLE_SIZE;
     }
 
-    /**
-     * 根据拖拽手柄类型调整选框
-     */
     private void applyHandleMove(int handle, float dx, float dy) {
         int newL = startLeft, newT = startTop, newR = startRight, newB = startBottom;
 
@@ -252,11 +237,8 @@ public class AreaSelectionView extends View {
                 newB = clampY(startBottom + (int) dy);
                 break;
             case HANDLE_BODY:
-                int w = startRight - startLeft;
-                int h = startBottom - startTop;
                 int bodyDx = (int) dx;
                 int bodyDy = (int) dy;
-                // 边界限制
                 if (startLeft + bodyDx < 0) bodyDx = -startLeft;
                 if (startTop + bodyDy < 0) bodyDy = -startTop;
                 if (startRight + bodyDx > screenW) bodyDx = screenW - startRight;
@@ -268,7 +250,6 @@ public class AreaSelectionView extends View {
                 break;
         }
 
-        // 确保最小尺寸
         if (newR - newL < MIN_SELECTION) {
             if (handle == HANDLE_TL || handle == HANDLE_BL) newL = newR - MIN_SELECTION;
             else newR = newL + MIN_SELECTION;
@@ -281,9 +262,6 @@ public class AreaSelectionView extends View {
         selectionRect.set(newL, newT, newR, newB);
     }
 
-    /**
-     * 双指缩放选框
-     */
     private void scaleSelection(float scale) {
         int cx = selectionRect.centerX();
         int cy = selectionRect.centerY();
@@ -315,9 +293,6 @@ public class AreaSelectionView extends View {
         return Math.max(0, Math.min(y, screenH));
     }
 
-    /**
-     * 确认选择
-     */
     private void confirmSelection() {
         int x = selectionRect.left;
         int y = selectionRect.top;
@@ -333,9 +308,6 @@ public class AreaSelectionView extends View {
         }
     }
 
-    /**
-     * 获取当前选择区域
-     */
     public Rect getSelection() {
         return new Rect(selectionRect);
     }

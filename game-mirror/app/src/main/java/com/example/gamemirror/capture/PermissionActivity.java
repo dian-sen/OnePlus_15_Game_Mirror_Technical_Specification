@@ -8,7 +8,7 @@ import android.util.Log;
 
 /**
  * 透明权限请求 Activity
- * 用于触发 MediaProjection 录屏权限 Intent（LSPosed 模块会自动跳过弹窗）
+ * 触发 MediaProjection 录屏权限 Intent，LSPosed 模块自动跳过弹窗静默授权
  */
 public class PermissionActivity extends Activity {
 
@@ -23,7 +23,6 @@ public class PermissionActivity extends Activity {
         projectionManager = (MediaProjectionManager)
                 getSystemService(MEDIA_PROJECTION_SERVICE);
 
-        // 直接启动录屏权限请求（LSPosed Hook 会静默授权）
         Intent intent = projectionManager.createScreenCaptureIntent();
         startActivityForResult(intent, REQUEST_CODE);
     }
@@ -35,10 +34,9 @@ public class PermissionActivity extends Activity {
         if (requestCode == REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
                 Log.i(TAG, "MediaProjection permission granted (via LSPosed)");
-                // 将结果回调给主 Activity
                 Intent resultIntent = new Intent();
                 resultIntent.putExtra("resultCode", resultCode);
-                resultIntent.putExtra("data", data);
+                resultIntent.putExtra("intent_clone", data != null ? new Intent(data) : null);
                 setResult(RESULT_OK, resultIntent);
             } else {
                 Log.w(TAG, "MediaProjection permission denied");
