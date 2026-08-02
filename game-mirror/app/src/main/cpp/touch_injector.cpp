@@ -4,6 +4,7 @@
 #include <linux/uinput.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <cerrno>
 #include <cstring>
 #include <dirent.h>
 #include <android/log.h>
@@ -85,7 +86,7 @@ Java_com_example_gamemirror_touch_TouchRedirector_nativeRelease(
 // ========================================================================
 
 TouchInjector::TouchInjector()
-    : fd_(-1), isUinput_(false), uinputFd_(-1), maxSlots_(10) {}
+    : fd_(-1), isUinput_(false), uinputFd_(-1), maxSlots_(10), activeSlots_(0) {}
 
 TouchInjector::~TouchInjector() {
     release();
@@ -154,6 +155,7 @@ bool TouchInjector::injectMultiTouchDown(int x, int y, int slotId, int trackingI
     sendEvent(EV_ABS, ABS_MT_POSITION_Y, y);
     sendEvent(EV_SYN, SYN_REPORT, 0);
 
+    activeSlots_++;
     return true;
 }
 
@@ -174,8 +176,12 @@ bool TouchInjector::injectMultiTouchUp(int slotId) {
     sendEvent(EV_ABS, ABS_MT_SLOT, slotId);
     sendEvent(EV_ABS, ABS_MT_TRACKING_ID, -1);
 
-    // 检查是否所有 slot 都已抬起
-    sendEvent(EV_KEY, BTN_TOUCH, 0);
+    activeSlots_--;
+    // 仅当所有 slot 都抬起时才发送 BTN_TOUCH=0，避免影响其他活跃触点
+    if (activeSlots_ <= 0) {
+        activeSlots_ = 0;
+        sendEvent(EV_KEY, BTN_TOUCH, 0);
+    }
     sendEvent(EV_SYN, SYN_REPORT, 0);
 
     return true;
@@ -240,7 +246,32 @@ void TouchInjector::sendEvent(int type, int code, int value) {
     ev.type = type;
     ev.code = code;
     ev.value = value;
-    write(fd_, &ev, sizeof(ev));
+
+    // 非阻塞写入重试逻辑：处理部分写入和 EAGAIN
+    ssize_t written = 0;
+    ssize_t total = sizeof(ev);
+    char* buf = reinterpret_cast<char*>(&ev);
+    int retries = 0;
+    const int MAX_RETRIES = 3;
+
+    while (written < total && retries < MAX_RETRIES) {
+        ssize_t n = write(fd_, buf + written, total - written);
+        if (n > 0) {
+            written += n;
+        } else if (n == 0) {
+            LOGE("sendEvent: write returned 0 (fd closed?)");
+            break;
+        } else {
+            // n < 0: error
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                retries++;
+                usleep(500); // 等待 0.5ms 后重试
+                continue;
+            }
+            LOGE("sendEvent: write failed: %s", strerror(errno));
+            break;
+        }
+    }
 }
 
 // ========================================================================
@@ -339,20 +370,45 @@ std::string TouchInjector::findTouchDevice() {
         return "";
     }
 
+    std::string bestDevice;
     struct dirent* entry;
+
     while ((entry = readdir(dir)) != nullptr) {
         if (strncmp(entry->d_name, "event", 5) != 0) {
             continue;
         }
         std::string path = std::string(INPUT_DEV_DIR) + "/" + entry->d_name;
-        if (isTouchDevice(path)) {
-            closedir(dir);
-            return path;
+        if (!isTouchDevice(path)) {
+            continue;
+        }
+
+        // 优先匹配名称包含 "touchscreen" 或 "synaptics" 的设备
+        char name[256] = {0};
+        int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
+        if (fd >= 0) {
+            if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), name) >= 0) {
+                if (strstr(name, "touchscreen") || strstr(name, "synaptics")
+                        || strstr(name, "fts") || strstr(name, "goodix")) {
+                    close(fd);
+                    closedir(dir);
+                    LOGI("Found primary touchscreen: %s (%s)", path.c_str(), name);
+                    return path;
+                }
+            }
+            close(fd);
+        }
+
+        // 记录第一个匹配设备作为回退
+        if (bestDevice.empty()) {
+            bestDevice = path;
         }
     }
 
     closedir(dir);
-    return "";
+    if (!bestDevice.empty()) {
+        LOGI("Using fallback touch device: %s", bestDevice.c_str());
+    }
+    return bestDevice;
 }
 
 bool TouchInjector::isTouchDevice(const std::string& path) {

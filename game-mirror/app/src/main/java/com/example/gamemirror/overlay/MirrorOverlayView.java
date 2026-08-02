@@ -2,6 +2,8 @@ package com.example.gamemirror.overlay;
 
 import android.content.Context;
 import android.opengl.GLSurfaceView;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ViewGroup;
@@ -45,6 +47,12 @@ public class MirrorOverlayView extends FrameLayout {
     // 双击检测
     private long lastTapTime = 0;
     private static final long DOUBLE_TAP_INTERVAL = 300;
+
+    // 短按延迟重定向（区分悬浮窗操作与游戏触控）
+    private final Handler touchHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingRedirect = null;
+    private static final long TOUCH_REDIRECT_DELAY_MS = 120;
+    private float pendingRedirectX, pendingRedirectY;
 
     // 边缘吸附
     private static final int EDGE_SNAP_THRESHOLD = 30;
@@ -124,6 +132,11 @@ public class MirrorOverlayView extends FrameLayout {
                     // 双击检测
                     long now = System.currentTimeMillis();
                     if (now - lastTapTime < DOUBLE_TAP_INTERVAL) {
+                        // 取消延迟重定向，执行双击重置
+                        if (pendingRedirect != null) {
+                            touchHandler.removeCallbacks(pendingRedirect);
+                            pendingRedirect = null;
+                        }
                         resetToDefault();
                         return true;
                     }
@@ -182,10 +195,23 @@ public class MirrorOverlayView extends FrameLayout {
                     }
 
                     if (!isDragging) {
-                        // 非拖拽 → 触控重定向到 A 区域
-                        float bx = event.getX();
-                        float by = event.getY();
-                        touchRedirector.redirectTouch(bx, by, viewWidth, viewHeight);
+                        // 非拖拽 → 短按延迟后触控重定向（区分悬浮窗操作与游戏触控）
+                        final float bx = event.getX();
+                        final float by = event.getY();
+                        pendingRedirectX = bx;
+                        pendingRedirectY = by;
+
+                        // 取消之前的延迟任务
+                        if (pendingRedirect != null) {
+                            touchHandler.removeCallbacks(pendingRedirect);
+                        }
+
+                        pendingRedirect = () -> {
+                            touchRedirector.redirectTouch(pendingRedirectX, pendingRedirectY,
+                                    viewWidth, viewHeight);
+                            pendingRedirect = null;
+                        };
+                        touchHandler.postDelayed(pendingRedirect, TOUCH_REDIRECT_DELAY_MS);
                     } else {
                         // 边缘吸附
                         snapToEdge();

@@ -17,6 +17,8 @@ import com.example.gamemirror.capture.ScreenCaptureManager;
 import com.example.gamemirror.config.ConfigManager;
 import com.example.gamemirror.touch.TouchRedirector;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * 悬浮窗 Overlay 服务
  * 管理 B 区域悬浮窗的生命周期，协调画面采集与触控映射
@@ -50,6 +52,9 @@ public class MirrorOverlayService extends Service {
     private TouchRedirector touchRedirector;
     private ConfigManager configManager;
 
+    // 初始化完成标志（防止 onStartCommand 在 onCreate 完成前处理 Intent）
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -57,7 +62,7 @@ public class MirrorOverlayService extends Service {
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         configManager = new ConfigManager(this);
-        touchRedirector = new TouchRedirector();
+        touchRedirector = new TouchRedirector(this);
         captureManager = new ScreenCaptureManager(this);
 
         // 记录屏幕尺寸
@@ -75,6 +80,9 @@ public class MirrorOverlayService extends Service {
         touchRedirector.setArea(
                 configManager.getAreaX(), configManager.getAreaY(),
                 configManager.getAreaWidth(), configManager.getAreaHeight());
+
+        // 标记初始化完成
+        initialized.set(true);
 
         Log.i(TAG, "MirrorOverlayService started, overlay added (uinput="
                 + touchRedirector.isUinputMode() + ")");
@@ -102,7 +110,25 @@ public class MirrorOverlayService extends Service {
         if (intent != null) {
             String action = intent.getAction();
 
-            if (action != null && overlayView != null) {
+            if (action != null) {
+                // 等待初始化完成后再处理 Action 指令
+                if (!initialized.get()) {
+                    Log.w(TAG, "Service not yet initialized, deferring action: " + action);
+                    // 短暂延迟后重试（简单自旋等待，通常 < 1ms）
+                    try {
+                        int waited = 0;
+                        while (!initialized.get() && waited < 100) {
+                            Thread.sleep(1);
+                            waited++;
+                        }
+                    } catch (InterruptedException ignored) {}
+                }
+
+                if (!initialized.get()) {
+                    Log.e(TAG, "Service initialization timed out, ignoring action: " + action);
+                    return START_STICKY;
+                }
+
                 switch (action) {
                     case ACTION_TOGGLE_MIRROR:
                         overlayView.cycleMirrorMode();
@@ -140,8 +166,12 @@ public class MirrorOverlayService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (overlayView != null && overlayView.isAttachedToWindow()) {
-            windowManager.removeView(overlayView);
+        if (overlayView != null) {
+            if (overlayView.isAttachedToWindow()) {
+                windowManager.removeView(overlayView);
+            }
+            // 释放 GL 资源（纹理、Shader Program）
+            overlayView.getGLRenderer().release();
         }
         if (captureManager != null) {
             captureManager.stopCapture();

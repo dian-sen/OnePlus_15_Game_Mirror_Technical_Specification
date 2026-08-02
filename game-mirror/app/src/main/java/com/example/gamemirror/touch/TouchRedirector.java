@@ -30,6 +30,9 @@ public class TouchRedirector {
     private boolean nativeInitialized = false;
     private boolean isUinput = false;
 
+    // Context 引用（用于 InputManager 回退方案，避免隐藏 API）
+    private final android.content.Context appContext;
+
     // 独立 Slot ID（避免与游戏主操作冲突）
     private static final int MIRROR_SLOT_ID = 1;
     private static final int MIRROR_TRACKING_ID = 200;
@@ -42,7 +45,11 @@ public class TouchRedirector {
         }
     }
 
-    public TouchRedirector() {
+    /**
+     * @param context 应用 Context（由 MirrorOverlayService 注入）
+     */
+    public TouchRedirector(android.content.Context context) {
+        this.appContext = context.getApplicationContext();
         nativeHandle = nativeInit();
         nativeInitialized = (nativeHandle != 0);
         if (nativeInitialized) {
@@ -118,8 +125,7 @@ public class TouchRedirector {
         try {
             android.hardware.input.InputManager im =
                     (android.hardware.input.InputManager)
-                            android.app.ActivityThread.currentApplication()
-                                    .getSystemService(android.content.Context.INPUT_SERVICE);
+                            appContext.getSystemService(android.content.Context.INPUT_SERVICE);
 
             long downTime = android.os.SystemClock.uptimeMillis();
 
@@ -148,8 +154,7 @@ public class TouchRedirector {
         try {
             android.hardware.input.InputManager im =
                     (android.hardware.input.InputManager)
-                            android.app.ActivityThread.currentApplication()
-                                    .getSystemService(android.content.Context.INPUT_SERVICE);
+                            appContext.getSystemService(android.content.Context.INPUT_SERVICE);
 
             long downTime = android.os.SystemClock.uptimeMillis();
 
